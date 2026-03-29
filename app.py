@@ -214,6 +214,24 @@ def build_config_from_sidebar():
             )
             annual_amount = 30000  # Safe default for amount mode if not used
 
+        # ---- Return Assumptions ----
+        st.subheader("Return Assumptions")
+        st.info("""
+        The simulator calculates mean returns from historical UK stock data.
+        You can adjust this multiplier to account for different market expectations.
+
+        **Default (0.5x):** Conservative, more realistic long-term forecast.
+        **1.0x:** Use historical data as-is (may be optimistic if recent bull market).
+        """)
+        mu_multiplier = st.slider(
+            "Mean return adjustment (multiplier of data)",
+            min_value=0.25,
+            max_value=1.50,
+            value=0.50,
+            step=0.05,
+            help="0.5x = half the historical average. Good for conservative projections.",
+        )
+
         # ---- Tax Settings (Hardcoded for MVP) ----
         with st.expander("Tax Settings (UK 2024/25 defaults)"):
             st.info("""
@@ -299,21 +317,33 @@ def build_config_from_sidebar():
             },
         })
 
-    return config
+    return config, mu_multiplier
 
 
 # ============================================================================
 # Pipeline & Results Rendering
 # ============================================================================
 
-def run_pipeline(config):
+def run_pipeline(config, mu_multiplier=1.0):
     """
     Run the full simulation pipeline: load data, build DB schedule, run simulation,
     analyse results. Returns (results_dict, db_schedule, market_params).
+
+    Parameters
+    ----------
+    config : dict
+        Full configuration dict from build_config_from_sidebar()
+    mu_multiplier : float, default 1.0
+        Adjustment factor for mean return (mu). If 0.5, uses half the historical average.
     """
     try:
         # Load market data (cached)
         market_params = load_market_data()
+
+        # Adjust mean return based on user's multiplier
+        market_params["mu_d"] = market_params["mu_d"] * mu_multiplier
+        market_params["mu_d_original"] = load_market_data()["mu_d"]  # Store original for display
+        market_params["mu_multiplier"] = mu_multiplier
 
         # Build DB income schedule
         db_schedule = build_db_income_schedule(config)
@@ -437,7 +467,10 @@ def render_results(results, config, db_schedule, market_params):
                 st.write(f"- Returns calibrated from: UK stock market (VWRP)")
                 st.write(f"- Inflation adjusted with: CPIH (UK Consumer Price Index)")
                 if market_params:
-                    st.write(f"- Mean monthly return (diffusion): {market_params['mu_d']*100:.2f}%")
+                    orig_mu = market_params.get("mu_d_original", market_params["mu_d"])
+                    mult = market_params.get("mu_multiplier", 1.0)
+                    adj_mu = market_params["mu_d"]
+                    st.write(f"- Mean monthly return (data): {orig_mu*100:.2f}% → adjusted: {adj_mu*100:.2f}% (×{mult:.2f})")
                     st.write(f"- Volatility (σ): {market_params['sigma_d']*100:.2f}%")
 
             with col_right:
@@ -486,7 +519,7 @@ def main():
     """)
 
     # Build config from sidebar
-    config = build_config_from_sidebar()
+    config, mu_multiplier = build_config_from_sidebar()
 
     # Validate config
     validation_errors = []
@@ -527,7 +560,7 @@ def main():
 
     # Run simulation if button clicked
     if run_button:
-        results, db_schedule, market_params = run_pipeline(config)
+        results, db_schedule, market_params = run_pipeline(config, mu_multiplier)
         if results:
             st.session_state.sim_results = (results, config, db_schedule, market_params)
 
