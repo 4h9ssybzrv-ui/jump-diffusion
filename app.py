@@ -205,6 +205,7 @@ def build_config_from_sidebar():
             )
             annual_percentage = 4.0  # Safe default for percentage mode if not used
             percentage_cap = None  # No cap for fixed amount mode
+            percentage_floor = None  # No floor for fixed amount mode
         else:
             annual_percentage = st.number_input(
                 "Annual drawdown (% of portfolio)",
