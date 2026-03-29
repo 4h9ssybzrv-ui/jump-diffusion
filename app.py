@@ -335,9 +335,9 @@ def run_pipeline(config):
             ruin_ages,
             ages,
             config,
-            gia_values_accum=gia_accum,
-            isa_values_accum=isa_accum,
-            dc_values_accum=dc_accum,
+            gia_accum=gia_accum,
+            isa_accum=isa_accum,
+            dc_accum=dc_accum,
         )
 
         return results, db_schedule, market_params
