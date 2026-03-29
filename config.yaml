@@ -1,0 +1,138 @@
+# ============================================================
+# Monte Carlo Retirement Portfolio Simulator
+# Configuration File — edit this to match your situation
+# ============================================================
+
+simulation:
+  n_simulations: 10000   # Number of Monte Carlo paths (lower for faster testing)
+  random_seed: 42        # Fixed seed = reproducible results. Set to null for random.
+
+user:
+  current_age: 31
+  retirement_age: 55
+  life_expectancy: 100
+
+data:
+  prices_file: "data/VWRP Dailies - Sheet1.csv"
+  cpih_file:   "data/series-280326.csv"
+
+# ── UK Income Tax Bands (2024/25, England & Wales) ──────────────────────────
+# Update these each tax year — no code changes needed.
+# Scotland uses different bands — not currently supported.
+tax_bands:
+  personal_allowance:  12570    # £/year — 0% tax on income below this
+  basic_rate_limit:    50270    # £/year — 20% tax between personal_allowance and here
+  higher_rate_limit:   125140   # £/year — 40% tax between basic_rate_limit and here
+                                # 45% additional rate applies above higher_rate_limit
+  basic_rate:          0.20
+  higher_rate:         0.40
+  additional_rate:     0.45
+  cgt_rate:            0.20     # Capital Gains Tax rate on GIA gains (simplified flat rate)
+  lump_sum_allowance:  268275   # £ — lifetime cap on tax-free pension cash across ALL schemes
+
+# ── GIA (General Investment Account) ────────────────────────────────────────
+gia:
+  starting_value: 10000
+  monthly_contribution: 500
+  real_contribution_growth: 0.0  # Extra real growth rate on top of inflation.
+                                 # 0.0 = contributions stay flat in real terms.
+                                 # 0.02 = contributions grow 2% per year in real terms.
+  annual_limit: null             # No HMRC limit on GIA contributions.
+
+# ── ISA (Stocks & Shares) ────────────────────────────────────────────────────
+# Assumes a Stocks & Shares ISA invested in global equities. Cash ISAs not supported.
+isa:
+  starting_value: 120000
+  monthly_contribution: 1666
+  real_contribution_growth: 0.0
+  annual_limit: 20000            # HMRC annual ISA allowance (£)
+
+# ── Pension Schemes ──────────────────────────────────────────────────────────
+# List one or more pension schemes. Supports DC, DB, and hybrid.
+# Annual pension allowance (£60,000) applies to combined DC contributions across ALL schemes.
+# Lump Sum Allowance (£268,275) applies to combined tax-free cash across ALL schemes.
+pensions:
+  - id: "main_pension"
+    type: "DC"           # Options: "DC" | "DB" | "hybrid"
+
+    dc:
+      starting_value: 150000
+      monthly_contribution: 2666
+      real_contribution_growth: 0.0
+      annual_limit: 60000        # Combined across ALL pension schemes
+      pension_access_age: 60     # Minimum age to draw from this DC pot
+
+    # ── DB example (uncomment to use instead of or alongside DC) ────────────
+    # db:
+    #   input_mode: "projected"          # Use your pension statement figure
+    #   projected_annual_income: 18000   # £/yr in today's money at normal_pension_age
+    #   normal_pension_age: 67
+    #
+    # -- OR use the full CARE calculation: --
+    # db:
+    #   input_mode: "calculate"
+    #   scheme_preset: "nhs_2015"        # "generic" | "nhs_2015" | "uss"
+    #   normal_pension_age: 67
+    #   current_pensionable_salary: 45000
+    #   annual_salary_growth: "CPI"
+    #   years_of_service_to_date: 10
+    #   years_of_service_at_retirement: 35
+
+# ── Example: NHS DB + Private DC (uncomment to use) ─────────────────────────
+# pensions:
+#   - id: "nhs_db"
+#     type: "DB"
+#     db:
+#       input_mode: "projected"
+#       projected_annual_income: 15000
+#       normal_pension_age: 67
+#
+#   - id: "private_dc"
+#     type: "DC"
+#     dc:
+#       starting_value: 80000
+#       monthly_contribution: 800
+#       real_contribution_growth: 0.01
+#       annual_limit: 60000
+#       pension_access_age: 57
+
+# ── Drawdown ─────────────────────────────────────────────────────────────────
+drawdown:
+  mode: "amount"          # "amount" (fixed £/yr) or "percentage" (% of total portfolio)
+  annual_amount: 50000    # £/yr in today's money, gross target before tax and DB offset.
+  percentage: 4.0         # Used only if mode = "percentage"
+  # DB income offsets this target first. Only the shortfall is drawn from GIA/ISA/DC.
+
+# ── One-Off Lump Sum Injections ──────────────────────────────────────────────
+# Add lump sums at specific ages (e.g. inheritance, bonus, property equity).
+# Each goes into the specified wrapper. Annual limits still apply.
+# Set to an empty list [] if you have no lump sums.
+lump_sums:
+  []
+  # Example:
+  # - age: 50
+  #   amount: 50000
+  #   wrapper: "isa"       # "gia" | "isa" | pension scheme id (e.g. "main_pension")
+  # - age: 55
+  #   amount: 20000
+  #   wrapper: "gia"
+
+# ── Jump-Diffusion Model ─────────────────────────────────────────────────────
+# The diffusion parameters (mu_d, sigma_d) are computed automatically from the data.
+# Only the jump component is configured here.
+#
+# What each parameter means:
+#   jump_threshold_sigma : How many standard deviations below the mean counts as a crash
+#                          month during calibration. Default 2.5 is recommended.
+#   lambda_annual        : Annual probability of a jump event (~10% = once per decade)
+#   jump_mean            : Average single-month crash size (calibrated to -20% from
+#                          Oct 1987, Oct 2008, Mar 2020 data)
+#   jump_std             : Spread of crash sizes (6% std = most jumps between -14% and -26%)
+#   jump_clip_lower/upper: Hard limits to prevent unrealistic extreme values
+jump_diffusion:
+  jump_threshold_sigma: 2.5
+  lambda_annual:        0.10
+  jump_mean:           -0.20
+  jump_std:             0.06
+  jump_clip_lower:     -0.60
+  jump_clip_upper:     -0.05
