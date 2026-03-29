@@ -232,6 +232,23 @@ def build_config_from_sidebar():
             else:
                 percentage_cap = None
 
+            # Optional floor for percentage mode
+            use_floor = st.checkbox(
+                "Set minimum annual withdrawal floor",
+                value=False,
+                help="E.g., withdraw 4% but at least £20k/year. Useful to ensure adequate spending.",
+            )
+            if use_floor:
+                percentage_floor = st.number_input(
+                    "Minimum annual withdrawal (£)",
+                    value=20000,
+                    min_value=1,
+                    step=1000,
+                    help="Withdrawal will be the higher of: (portfolio × %) or this floor.",
+                )
+            else:
+                percentage_floor = None
+
         # ---- Return Assumptions ----
         st.subheader("Return Assumptions")
         st.info("""
@@ -308,6 +325,7 @@ def build_config_from_sidebar():
             "annual_amount": annual_amount,
             "percentage": annual_percentage,
             "percentage_cap": percentage_cap,  # Optional cap for percentage-based mode
+            "percentage_floor": percentage_floor,  # Optional floor for percentage-based mode
         },
         "lump_sums": [],  # Not supported in Streamlit MVP
         "jump_diffusion": {
@@ -514,24 +532,38 @@ def render_results(results, config, db_schedule, market_params):
             # For percentage mode, calculate withdrawal at each percentile
             withdrawal_pct = drawdown_config["percentage"]
             cap = drawdown_config.get("percentage_cap")
+            floor = drawdown_config.get("percentage_floor")
 
-            # Calculate withdrawals with optional cap applied
+            # Helper to apply cap and floor
+            def apply_limits(amount, cap_val, floor_val):
+                if cap_val is not None:
+                    amount = min(amount, cap_val)
+                if floor_val is not None:
+                    amount = max(amount, floor_val)
+                return amount
+
+            # Calculate withdrawals with optional cap and floor applied
             withdrawal_data["25th %ile Withdrawal"] = [
-                f"£{min(draw_bands[25][i] * (withdrawal_pct / 100), cap) if cap else draw_bands[25][i] * (withdrawal_pct / 100):,.0f}"
+                f"£{apply_limits(draw_bands[25][i] * (withdrawal_pct / 100), cap, floor):,.0f}"
                 for i in sampled_indices
             ]
             withdrawal_data["50th %ile Withdrawal"] = [
-                f"£{min(draw_bands[50][i] * (withdrawal_pct / 100), cap) if cap else draw_bands[50][i] * (withdrawal_pct / 100):,.0f}"
+                f"£{apply_limits(draw_bands[50][i] * (withdrawal_pct / 100), cap, floor):,.0f}"
                 for i in sampled_indices
             ]
             withdrawal_data["75th %ile Withdrawal"] = [
-                f"£{min(draw_bands[75][i] * (withdrawal_pct / 100), cap) if cap else draw_bands[75][i] * (withdrawal_pct / 100):,.0f}"
+                f"£{apply_limits(draw_bands[75][i] * (withdrawal_pct / 100), cap, floor):,.0f}"
                 for i in sampled_indices
             ]
 
             caption = f"Based on {withdrawal_pct:.1f}% annual drawdown rate"
-            if cap:
-                caption += f" (capped at £{cap:,.0f}/year)"
+            if cap or floor:
+                limits = []
+                if cap:
+                    limits.append(f"max £{cap:,.0f}/year")
+                if floor:
+                    limits.append(f"min £{floor:,.0f}/year")
+                caption += f" ({', '.join(limits)})"
             st.caption(caption)
         else:
             # For fixed amount mode, all percentiles have the same withdrawal amount
@@ -596,6 +628,7 @@ def render_results(results, config, db_schedule, market_params):
                 else:
                     pct = config['drawdown']['percentage']
                     cap = config['drawdown'].get('percentage_cap')
+                    floor = config['drawdown'].get('percentage_floor')
                     median_at_ret = results["values_at_retirement"][50]
                     amount = median_at_ret * (pct / 100)
                     st.write(f"- Mode: Percentage")
@@ -603,6 +636,8 @@ def render_results(results, config, db_schedule, market_params):
                     st.write(f"- Annual amount (median): £{amount:,.0f}")
                     if cap:
                         st.write(f"- Cap applied: £{cap:,.0f}/year maximum")
+                    if floor:
+                        st.write(f"- Floor applied: £{floor:,.0f}/year minimum")
 
                 st.write("**Tax Assumptions**")
                 st.write("- GIA: 20% CGT on gains only")

@@ -86,6 +86,11 @@ def run_monthly_drawdown(
             cap_monthly = float(dd_cfg["percentage_cap"]) / 12.0
             target_net_monthly = min(target_net_monthly, cap_monthly)
 
+        # Apply floor if set (e.g., "withdraw at least £20k/year even if 4% suggests less")
+        if dd_cfg.get("percentage_floor") is not None:
+            floor_monthly = float(dd_cfg["percentage_floor"]) / 12.0
+            target_net_monthly = max(target_net_monthly, floor_monthly)
+
     remaining = target_net_monthly  # How much net income we still need to source
 
     # ── Step 1: DB income ──────────────────────────────────────────────────
