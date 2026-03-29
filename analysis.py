@@ -25,7 +25,8 @@ from typing import Optional
 
 
 # Percentile levels — focused on downside risk (1st, 2.5th, 5th) plus median and upside (75th)
-PERCENTILES = [1, 2.5, 5, 50, 75]
+# Also include 25th percentile for interquartile range analysis
+PERCENTILES = [1, 2.5, 5, 25, 50, 75]
 
 
 def compute_percentile_bands(

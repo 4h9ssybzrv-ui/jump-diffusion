@@ -465,6 +465,47 @@ def render_results(results, config, db_schedule, market_params):
             }
             st.dataframe(pd.DataFrame(db_data), use_container_width=True, hide_index=True)
 
+        # ---- Annual Withdrawal by Age (Drawdown Phase) ----
+        st.subheader("💸 Annual Withdrawal by Age (Drawdown Phase)")
+
+        drawdown_config = config["drawdown"]
+        draw_ages = results["draw_ages"]
+        draw_bands = results["draw_bands"]
+
+        # Sample every year during drawdown (or every 5 years if drawdown is very long)
+        sample_freq = 1 if len(draw_ages) <= 50 else 5
+        sampled_indices = [i for i in range(0, len(draw_ages), sample_freq)]
+
+        withdrawal_data = {
+            "Age": [int(draw_ages[i]) for i in sampled_indices],
+        }
+
+        if drawdown_config["mode"] == "percentage":
+            # For percentage mode, calculate withdrawal at each percentile
+            withdrawal_pct = drawdown_config["percentage"]
+            withdrawal_data["25th %ile Withdrawal"] = [
+                f"£{draw_bands[25][i] * (withdrawal_pct / 100):,.0f}"
+                for i in sampled_indices
+            ]
+            withdrawal_data["50th %ile Withdrawal"] = [
+                f"£{draw_bands[50][i] * (withdrawal_pct / 100):,.0f}"
+                for i in sampled_indices
+            ]
+            withdrawal_data["75th %ile Withdrawal"] = [
+                f"£{draw_bands[75][i] * (withdrawal_pct / 100):,.0f}"
+                for i in sampled_indices
+            ]
+            st.caption(f"Based on {withdrawal_pct:.1f}% annual drawdown rate")
+        else:
+            # For fixed amount mode, all percentiles have the same withdrawal amount
+            fixed_amount = drawdown_config["annual_amount"]
+            withdrawal_data["Annual Withdrawal (Fixed)"] = [
+                f"£{fixed_amount:,.0f}"
+                for _ in sampled_indices
+            ]
+
+        st.dataframe(pd.DataFrame(withdrawal_data), use_container_width=True, hide_index=True)
+
         # ---- Assumptions Expander ----
         with st.expander("📋 Model Assumptions & Data"):
             col_left, col_right = st.columns(2)
