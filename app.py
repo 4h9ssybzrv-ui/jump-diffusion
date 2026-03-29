@@ -397,7 +397,7 @@ def render_results(results, config, db_schedule, market_params):
         plt.close(fig_draw)  # Prevent memory leak
 
         # ---- Key Metrics ----
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         retirement_age = config["user"]["retirement_age"]
         idx_retirement = np.argmin(np.abs(results["all_ages"] - retirement_age))
 
@@ -416,6 +416,26 @@ def render_results(results, config, db_schedule, market_params):
         with col4:
             ruin_pct = results["ruin_probability"]
             st.metric("Ruin Probability", f"{ruin_pct:.1f}%")
+
+        with col5:
+            # Calculate annual withdrawal amount
+            drawdown_config = config["drawdown"]
+            if drawdown_config["mode"] == "percentage":
+                withdrawal_pct = drawdown_config["percentage"]
+                withdrawal_amount = median_val * (withdrawal_pct / 100)
+                st.metric(
+                    "Annual Withdrawal (Median)",
+                    f"£{withdrawal_amount:,.0f}",
+                    delta=f"{withdrawal_pct:.1f}% of portfolio"
+                )
+            else:
+                withdrawal_amount = drawdown_config["annual_amount"]
+                withdrawal_pct = (withdrawal_amount / median_val) * 100
+                st.metric(
+                    "Annual Withdrawal (Fixed)",
+                    f"£{withdrawal_amount:,.0f}",
+                    delta=f"{withdrawal_pct:.1f}% of median"
+                )
 
         # ---- Percentile Table ----
         st.subheader("📋 Portfolio Values by Age (Percentiles)")
@@ -489,9 +509,19 @@ def render_results(results, config, db_schedule, market_params):
 
                 st.write("**Drawdown**")
                 if config["drawdown"]["mode"] == "amount":
-                    st.write(f"- Fixed annual: £{config['drawdown']['annual_amount']:,.0f}")
+                    annual_amount = config['drawdown']['annual_amount']
+                    median_at_ret = results["values_at_retirement"][50]
+                    rate = (annual_amount / median_at_ret * 100) if median_at_ret > 0 else 0
+                    st.write(f"- Mode: Fixed amount")
+                    st.write(f"- Annual withdrawal: £{annual_amount:,.0f}")
+                    st.write(f"- Withdrawal rate (median): {rate:.2f}% of portfolio")
                 else:
-                    st.write(f"- Percentage: {config['drawdown']['percentage']:.1f}% of portfolio")
+                    pct = config['drawdown']['percentage']
+                    median_at_ret = results["values_at_retirement"][50]
+                    amount = median_at_ret * (pct / 100)
+                    st.write(f"- Mode: Percentage")
+                    st.write(f"- Withdrawal rate: {pct:.1f}% of portfolio")
+                    st.write(f"- Annual amount (median): £{amount:,.0f}")
 
                 st.write("**Tax Assumptions**")
                 st.write("- GIA: 20% CGT on gains only")
