@@ -459,11 +459,17 @@ def render_results(results, config, db_schedule, market_params):
         # ---- Percentile Table ----
         st.subheader("📋 Portfolio Values by Age (Percentiles)")
 
-        # Sample every 5 years for readability
+        # Sample once per year (when age crosses an integer boundary)
         all_ages = results["all_ages"]
         bands = results["percentile_bands"]
 
-        sampled_indices = [i for i, age in enumerate(all_ages) if int(age) % 5 == 0]
+        sampled_indices = []
+        prev_age = None
+        for i, age in enumerate(all_ages):
+            curr_age = int(age)
+            if prev_age is None or curr_age > prev_age:
+                sampled_indices.append(i)
+                prev_age = curr_age
 
         table_data = {
             "Age": [int(all_ages[i]) for i in sampled_indices],
@@ -491,9 +497,14 @@ def render_results(results, config, db_schedule, market_params):
         draw_ages = results["draw_ages"]
         draw_bands = results["draw_bands"]
 
-        # Sample every year during drawdown (or every 5 years if drawdown is very long)
-        sample_freq = 1 if len(draw_ages) <= 50 else 5
-        sampled_indices = [i for i in range(0, len(draw_ages), sample_freq)]
+        # Sample once per year (when age crosses an integer boundary)
+        sampled_indices = []
+        prev_age = None
+        for i, age in enumerate(draw_ages):
+            curr_age = int(age)
+            if prev_age is None or curr_age > prev_age:
+                sampled_indices.append(i)
+                prev_age = curr_age
 
         withdrawal_data = {
             "Age": [int(draw_ages[i]) for i in sampled_indices],
