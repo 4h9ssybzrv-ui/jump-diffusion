@@ -204,6 +204,7 @@ def build_config_from_sidebar():
                 step=1000,
             )
             annual_percentage = 4.0  # Safe default for percentage mode if not used
+            percentage_cap = None  # No cap for fixed amount mode
         else:
             annual_percentage = st.number_input(
                 "Annual drawdown (% of portfolio)",
@@ -213,6 +214,23 @@ def build_config_from_sidebar():
                 step=0.1,
             )
             annual_amount = 30000  # Safe default for amount mode if not used
+
+            # Optional cap for percentage mode
+            use_cap = st.checkbox(
+                "Set maximum annual withdrawal cap",
+                value=False,
+                help="E.g., withdraw 4% but no more than £50k/year. Useful to control spending in high-portfolio years.",
+            )
+            if use_cap:
+                percentage_cap = st.number_input(
+                    "Maximum annual withdrawal (£)",
+                    value=50000,
+                    min_value=1,
+                    step=1000,
+                    help="Withdrawal will be the lower of: (portfolio × %) or this cap.",
+                )
+            else:
+                percentage_cap = None
 
         # ---- Return Assumptions ----
         st.subheader("Return Assumptions")
@@ -289,6 +307,7 @@ def build_config_from_sidebar():
             "mode": drawdown_mode,
             "annual_amount": annual_amount,
             "percentage": annual_percentage,
+            "percentage_cap": percentage_cap,  # Optional cap for percentage-based mode
         },
         "lump_sums": [],  # Not supported in Streamlit MVP
         "jump_diffusion": {
@@ -483,19 +502,26 @@ def render_results(results, config, db_schedule, market_params):
         if drawdown_config["mode"] == "percentage":
             # For percentage mode, calculate withdrawal at each percentile
             withdrawal_pct = drawdown_config["percentage"]
+            cap = drawdown_config.get("percentage_cap")
+
+            # Calculate withdrawals with optional cap applied
             withdrawal_data["25th %ile Withdrawal"] = [
-                f"£{draw_bands[25][i] * (withdrawal_pct / 100):,.0f}"
+                f"£{min(draw_bands[25][i] * (withdrawal_pct / 100), cap) if cap else draw_bands[25][i] * (withdrawal_pct / 100):,.0f}"
                 for i in sampled_indices
             ]
             withdrawal_data["50th %ile Withdrawal"] = [
-                f"£{draw_bands[50][i] * (withdrawal_pct / 100):,.0f}"
+                f"£{min(draw_bands[50][i] * (withdrawal_pct / 100), cap) if cap else draw_bands[50][i] * (withdrawal_pct / 100):,.0f}"
                 for i in sampled_indices
             ]
             withdrawal_data["75th %ile Withdrawal"] = [
-                f"£{draw_bands[75][i] * (withdrawal_pct / 100):,.0f}"
+                f"£{min(draw_bands[75][i] * (withdrawal_pct / 100), cap) if cap else draw_bands[75][i] * (withdrawal_pct / 100):,.0f}"
                 for i in sampled_indices
             ]
-            st.caption(f"Based on {withdrawal_pct:.1f}% annual drawdown rate")
+
+            caption = f"Based on {withdrawal_pct:.1f}% annual drawdown rate"
+            if cap:
+                caption += f" (capped at £{cap:,.0f}/year)"
+            st.caption(caption)
         else:
             # For fixed amount mode, all percentiles have the same withdrawal amount
             fixed_amount = drawdown_config["annual_amount"]
@@ -558,11 +584,14 @@ def render_results(results, config, db_schedule, market_params):
                     st.write(f"- Withdrawal rate (median): {rate:.2f}% of portfolio")
                 else:
                     pct = config['drawdown']['percentage']
+                    cap = config['drawdown'].get('percentage_cap')
                     median_at_ret = results["values_at_retirement"][50]
                     amount = median_at_ret * (pct / 100)
                     st.write(f"- Mode: Percentage")
                     st.write(f"- Withdrawal rate: {pct:.1f}% of portfolio")
                     st.write(f"- Annual amount (median): £{amount:,.0f}")
+                    if cap:
+                        st.write(f"- Cap applied: £{cap:,.0f}/year maximum")
 
                 st.write("**Tax Assumptions**")
                 st.write("- GIA: 20% CGT on gains only")

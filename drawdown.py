@@ -81,6 +81,11 @@ def run_monthly_drawdown(
         total_portfolio = gia.balance + isa.balance + sum(dc.balance for dc in dc_list)
         target_net_monthly = total_portfolio * (float(dd_cfg["percentage"]) / 100.0) / 12.0
 
+        # Apply cap if set (e.g., "don't withdraw more than £50k/year even if 4% suggests more")
+        if dd_cfg.get("percentage_cap") is not None:
+            cap_monthly = float(dd_cfg["percentage_cap"]) / 12.0
+            target_net_monthly = min(target_net_monthly, cap_monthly)
+
     remaining = target_net_monthly  # How much net income we still need to source
 
     # ── Step 1: DB income ──────────────────────────────────────────────────
